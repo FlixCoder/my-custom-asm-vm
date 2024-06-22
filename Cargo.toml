@@ -5,3 +5,34 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.86", features = ["backtrace"] }
+
+# Also test the examples
+[[example]]
+name = "asm_function"
+path = "examples/asm_function.rs"
+test = true
+
+[[example]]
+name = "asm_hello_worl"
+path = "examples/asm_hello_world.rs"
+test = true
+
+[[example]]
+name = "asm_loop"
+path = "examples/asm_loop.rs"
+test = true
+
+[[example]]
+name = "function"
+path = "examples/function.rs"
+test = true
+
+[[example]]
+name = "hello_world"
+path = "examples/hello_world.rs"
+test = true
+
+[[example]]
+name = "loop"
+path = "examples/loop.rs"
+test = true

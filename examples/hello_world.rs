@@ -26,3 +26,8 @@ fn main() -> anyhow::Result<()> {
 	machine.run()?;
 	Ok(())
 }
+
+#[test]
+fn test() {
+	main().unwrap();
+}

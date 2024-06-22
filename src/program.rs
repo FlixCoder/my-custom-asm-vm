@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::{collections::HashMap, ffi::CString, mem::size_of, str::FromStr};
 
 use anyhow::Context;
 
@@ -49,8 +49,9 @@ impl Program {
 
 	/// Add a data segment to the program. Returns the index of this instruction
 	/// to be used in [`make_copy_data`].
-	pub fn add_data(&mut self, data: &[u8]) -> usize {
-		self.add_instruction(Instruction::Data(vm_ptr(data.len()), data.into()))
+	pub fn add_data(&mut self, data: impl Into<Vec<u8>>) -> usize {
+		let data = data.into();
+		self.add_instruction(Instruction::Data(vm_ptr(data.len()), data))
 	}
 
 	/// Resolve the instruction index to a code memory address and its
@@ -72,6 +73,34 @@ impl Program {
 		let source = addr + 1 + vm_ptr(size_of::<VmPtr>());
 		let index = self.add_instruction(Instruction::CopyCodeMemory(source, *size));
 		Ok(index)
+	}
+
+	/// Add a dummy copy data instruction that needs to be adjusted later.
+	/// Return the index of this instruction to be used by jumps or calls.
+	pub fn add_dummy_copy_data(&mut self) -> usize {
+		self.add_instruction(Instruction::CopyCodeMemory(VmPtr::MAX, 0))
+	}
+
+	/// Replace dummy copy data with real copy data instruction.
+	pub fn replace_dummy_copy_data(
+		&mut self,
+		index: usize,
+		data_index: usize,
+	) -> anyhow::Result<()> {
+		let (addr, instruction) = self.resolve(data_index).context("Invalid data index")?;
+		let Instruction::Data(size, _data) = instruction else {
+			return Err(anyhow::format_err!("Data index doesn't point to data"));
+		};
+		let source = addr + 1 + vm_ptr(size_of::<VmPtr>());
+		let size = *size;
+		let instruction = self.instructions.get_mut(index).context("Invalid instruction index")?;
+		match instruction {
+			Instruction::CopyCodeMemory(_, _) => {
+				*instruction = Instruction::CopyCodeMemory(source, size);
+			}
+			_ => return Err(anyhow::format_err!("Instruction is not a dummy copy data")),
+		}
+		Ok(())
 	}
 
 	/// Add an instruction to the program that jumps to the indexed instruction.
@@ -254,9 +283,259 @@ impl Program {
 			| Instruction::JumpGreaterEqual(jump)
 			| Instruction::JumpLessEqual(jump)
 			| Instruction::JumpZero(jump)
-			| Instruction::JumpNonzero(jump) => *jump = addr,
-			_ => return Err(anyhow::format_err!("Instruction is not a jump or call")),
+			| Instruction::JumpNonzero(jump)
+				if *jump == VmPtr::MAX =>
+			{
+				*jump = addr
+			}
+			_ => return Err(anyhow::format_err!("Instruction is not a dummy jump or call")),
 		}
 		Ok(())
+	}
+}
+
+impl FromStr for Program {
+	type Err = anyhow::Error;
+
+	fn from_str(input: &str) -> Result<Self, Self::Err> {
+		let mut program = Program::new();
+		let mut next_index: usize = 0;
+		let mut label_index = HashMap::new();
+		let mut dummy_jumps = Vec::new();
+		let mut dummy_copy_data = Vec::new();
+
+		// Parse lines into instructions, making dummies at references to labels.
+		for line in input.lines().map(str::trim).filter(|s| !s.is_empty()) {
+			let parts = line.split_whitespace().collect::<Vec<_>>();
+			match parts[0].to_lowercase().as_str() {
+				// Comments.
+				"#" | "//" => continue,
+				// Label <name>
+				"label" if parts.len() == 2 => {
+					label_index.insert(parts[1], next_index);
+				}
+				// Nop
+				"nop" if parts.len() == 1 => {
+					program.add_nop();
+					next_index += 1;
+				}
+				// Halt
+				"halt" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Halt);
+					next_index += 1;
+				}
+				// Load8 <ptr>
+				"load8" if parts.len() == 2 => {
+					let ptr = parts[1].parse()?;
+					program.add_instruction(Instruction::Load8(ptr));
+					next_index += 1;
+				}
+				// Load16 <ptr>
+				"store8" if parts.len() == 2 => {
+					let ptr = parts[1].parse()?;
+					program.add_instruction(Instruction::Store8(ptr));
+					next_index += 1;
+				}
+				// Load16 <ptr>
+				"load16" if parts.len() == 2 => {
+					let ptr = parts[1].parse()?;
+					program.add_instruction(Instruction::Load16(ptr));
+					next_index += 1;
+				}
+				// Store16 <ptr>
+				"store16" if parts.len() == 2 => {
+					let ptr = parts[1].parse()?;
+					program.add_instruction(Instruction::Store16(ptr));
+					next_index += 1;
+				}
+				// Load32 <ptr>
+				"load32" if parts.len() == 2 => {
+					let ptr = parts[1].parse()?;
+					program.add_instruction(Instruction::Load32(ptr));
+					next_index += 1;
+				}
+				// Store32 <ptr>
+				"store32" if parts.len() == 2 => {
+					let ptr = parts[1].parse()?;
+					program.add_instruction(Instruction::Store32(ptr));
+					next_index += 1;
+				}
+				// Set <value>
+				"set" if parts.len() == 2 => {
+					let value = parts[1].parse()?;
+					program.add_instruction(Instruction::Set(value));
+					next_index += 1;
+				}
+				// Deref8
+				"deref8" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Deref8);
+					next_index += 1;
+				}
+				// Deref16
+				"deref16" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Deref16);
+					next_index += 1;
+				}
+				// Deref32
+				"deref32" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Deref32);
+					next_index += 1;
+				}
+				// Syscall <id>
+				"syscall" if parts.len() == 2 => {
+					let id = parts[1].parse()?;
+					program.add_syscall(id);
+					next_index += 1;
+				}
+				// CopyCodeMemory <target_data_label>
+				"copycodememory" if parts.len() == 2 => {
+					let index = program.add_dummy_copy_data();
+					dummy_copy_data.push((index, parts[1]));
+					next_index += 1;
+				}
+				// DataString <str>
+				"datastring" => {
+					let cstr = CString::new(line.split_at(10).1.trim())?;
+					program.add_data(cstr.into_bytes_with_nul());
+					next_index += 1;
+				}
+				// SwapRegisterA
+				"swapregistera" if parts.len() == 1 => {
+					program.add_instruction(Instruction::SwapRegisterA);
+					next_index += 1;
+				}
+				// Write8
+				"write8" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Write8);
+					next_index += 1;
+				}
+				// Write16
+				"write16" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Write16);
+					next_index += 1;
+				}
+				// Write32
+				"write32" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Write32);
+					next_index += 1;
+				}
+				// ReadStackPointer
+				"readstackpointer" if parts.len() == 1 => {
+					program.add_instruction(Instruction::ReadStackPointer);
+					next_index += 1;
+				}
+				// WriteStackPointer
+				"writestackpointer" if parts.len() == 1 => {
+					program.add_instruction(Instruction::WriteStackPointer);
+					next_index += 1;
+				}
+				// Jump <label>
+				"jump" if parts.len() == 2 => {
+					let index = program.add_dummy_jump();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// Call <label>
+				"call" if parts.len() == 2 => {
+					let index = program.add_dummy_call();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// Return
+				"return" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Return);
+					next_index += 1;
+				}
+				// Increment
+				"increment" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Increment);
+					next_index += 1;
+				}
+				// Decrement
+				"decrement" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Decrement);
+					next_index += 1;
+				}
+				// Add
+				"add" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Add);
+					next_index += 1;
+				}
+				// Sub
+				"sub" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Sub);
+					next_index += 1;
+				}
+				// Compare
+				"compare" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Compare);
+					next_index += 1;
+				}
+				// JumpEqual <label>
+				"jumpequal" if parts.len() == 2 => {
+					let index = program.add_dummy_jump_equal();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// JumpNotEqual <label>
+				"jumpnotequal" if parts.len() == 2 => {
+					let index = program.add_dummy_jump_not_equal();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// JumpGreater <label>
+				"jumpgreater" if parts.len() == 2 => {
+					let index = program.add_dummy_jump_greater();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// JumpLess <label>
+				"jumpless" if parts.len() == 2 => {
+					let index = program.add_dummy_jump_less();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// JumpGreaterEqual <label>
+				"jumpgreaterequal" if parts.len() == 2 => {
+					let index = program.add_dummy_jump_greater_equal();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// JumpLessEqual <label>
+				"jumplessequal" if parts.len() == 2 => {
+					let index = program.add_dummy_jump_less_equal();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// JumpZero <label>
+				"jumpzero" if parts.len() == 2 => {
+					let index = program.add_dummy_jump_zero();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// JumpNonzero <label>
+				"jumpnonzero" if parts.len() == 2 => {
+					let index = program.add_dummy_jump_nonzero();
+					dummy_jumps.push((index, parts[1]));
+					next_index += 1;
+				}
+				// Unknown command.
+				cmd => return Err(anyhow::format_err!("Unknown command: {cmd}")),
+			}
+		}
+
+		// Resolve dummies to their labels.
+		for (index, label) in dummy_jumps {
+			let target =
+				*label_index.get(&label).with_context(|| format!("Unresolved label: {label}"))?;
+			program.replace_dummy_address(index, target)?;
+		}
+		for (index, label) in dummy_copy_data {
+			let target =
+				*label_index.get(&label).with_context(|| format!("Unresolved label: {label}"))?;
+			program.replace_dummy_copy_data(index, target)?;
+		}
+
+		Ok(program)
 	}
 }
