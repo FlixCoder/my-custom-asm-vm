@@ -2,9 +2,12 @@ mod instruction;
 mod program;
 mod util;
 
+use std::mem::size_of;
+
 use anyhow::Context;
 use util::{
-	native_ptr, read_cstr, read_u16, read_u32, read_u8, vm_ptr, write_u16, write_u32, write_u8,
+	native_ptr, read_cstr, read_u16, read_u32, read_u8, read_vm_ptr, vm_ptr, write_u16, write_u32,
+	write_u8, write_vm_ptr,
 };
 
 pub use crate::{instruction::Instruction, program::Program};
@@ -18,17 +21,22 @@ pub struct Machine {
 	program: Box<[u8]>,
 	memory: Box<[u8]>,
 	instruction_pointer: VmPtr,
+	stack_pointer: VmPtr,
 	main_register: VmPtr,
+	register_a: VmPtr,
 }
 
 impl Machine {
 	/// Create a new virtual machine with the given program and memory size.
+	/// Stack pointer is initally at the end of the memory.
 	pub fn new(program: impl Into<Box<[u8]>>, memory_size: VmPtr) -> Self {
 		Self {
 			program: program.into(),
 			memory: vec![0; native_ptr(memory_size)].into(),
 			instruction_pointer: 0,
+			stack_pointer: memory_size,
 			main_register: 0,
+			register_a: 0,
 		}
 	}
 
@@ -119,9 +127,9 @@ impl Machine {
 				self.main_register = read_u32(mem)?.into();
 			}
 			Instruction::Syscall(index) => self.syscall(index)?,
-			Instruction::CopyCodeMemory(source, target, size) => {
+			Instruction::CopyCodeMemory(source, size) => {
 				let source = native_ptr(source);
-				let target = native_ptr(target);
+				let target = native_ptr(self.main_register);
 				let size = native_ptr(size);
 				let source = self.program.get(source..(source + size)).with_context(|| {
 					format!("Out of memory access occurred at program memory {source}")
@@ -131,6 +139,45 @@ impl Machine {
 					.get_mut(target..(target + size))
 					.with_context(|| format!("Out of memory access occurred at {target}"))?;
 				target.copy_from_slice(source);
+			}
+			Instruction::SwapRegisterA => {
+				std::mem::swap(&mut self.main_register, &mut self.register_a)
+			}
+			Instruction::Write8 => {
+				let value = self.register_a as u8;
+				let mem = self.memory_mut(self.main_register)?;
+				write_u8(mem, value)?;
+			}
+			Instruction::Write16 => {
+				let value = self.register_a as u16;
+				let mem = self.memory_mut(self.main_register)?;
+				write_u16(mem, value)?;
+			}
+			Instruction::Write32 => {
+				let value = self.register_a as u32;
+				let mem = self.memory_mut(self.main_register)?;
+				write_u32(mem, value)?;
+			}
+			Instruction::ReadStackPointer => self.main_register = self.stack_pointer,
+			Instruction::WriteStackPointer => self.stack_pointer = self.main_register,
+			Instruction::Jump(addr) => self.instruction_pointer = addr,
+			Instruction::Call(addr) => {
+				self.stack_pointer = self
+					.stack_pointer
+					.checked_sub(vm_ptr(size_of::<VmPtr>()))
+					.context("Stack overflow")?;
+				let ip = self.instruction_pointer;
+				let mem = self.memory_mut(self.stack_pointer)?;
+				write_vm_ptr(mem, ip)?;
+				self.instruction_pointer = addr;
+			}
+			Instruction::Return => {
+				let mem = self.memory(self.stack_pointer)?;
+				self.instruction_pointer = read_vm_ptr(mem)?;
+				self.stack_pointer = self
+					.stack_pointer
+					.checked_add(vm_ptr(size_of::<VmPtr>()))
+					.context("Stack underflow")?;
 			}
 		}
 		Ok(true)

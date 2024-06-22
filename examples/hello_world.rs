@@ -2,15 +2,16 @@ use my_vm::{Instruction, Machine, Program};
 
 fn hello_world_program() -> anyhow::Result<Program> {
 	let mut program = Program::new();
-	// No-op.
-	program.add_nop();
 	// Add data segment to hold our string.
 	let s = program.add_data(c"Hello world!".to_bytes_with_nul());
-	// Load the data segment into machine memory at 10.
-	program.add_copy_data(s, 10)?;
-	// Set the main register to 10 to point to the address we wrote the string to.
+	// Set the main register to 10 to point to the address we want to write the
+	// string to.
 	program.add_instruction(Instruction::Set(10));
-	// Call syscall 0 (println).
+	// Load the data segment into machine memory at the address in the main
+	// register.
+	program.add_copy_data(s)?;
+	// Call syscall 0 (println). Reads the string from the address in the main
+	// register.
 	program.add_syscall(0);
 	// Halt the machine.
 	program.add_halt();

@@ -37,13 +37,36 @@ pub enum Instruction {
 	/// Dereference the pointer in the main register to the 32 bit value it
 	/// points to.
 	Deref32,
-	/// Make a syscall to the given syscall index. The main register can be used
+	/// Make a syscall to the given syscall index. The registers can be used
 	/// to give arguments to the syscall, but handling differs across syscalls.
 	Syscall(u8),
-	/// Copy code memory to usable memory. Arguments: source, target, size.
-	CopyCodeMemory(VmPtr, VmPtr, VmPtr),
+	/// Copy code memory to machine memory. Copies from the given source address
+	/// to the address saved in the main register. Arguments: source, size.
+	CopyCodeMemory(VmPtr, VmPtr),
 	/// Data segment. Arguments: size/length, data.
 	Data(VmPtr, Vec<u8>),
+	/// Swap main register with register A.
+	SwapRegisterA,
+	/// Write the 8 bit value of register A to the address in the main register.
+	Write8,
+	/// Write the 16 bit value of register A to the address in the main
+	/// register.
+	Write16,
+	/// Write the 32 bit value of register A to the address in the main
+	/// register.
+	Write32,
+	/// Read stack pointer to main register.
+	ReadStackPointer,
+	/// Write main register to stack pointer.
+	WriteStackPointer,
+	/// Jump to given code address.
+	Jump(VmPtr),
+	/// Call function at given code address. Pushes the return address to the
+	/// stack.
+	Call(VmPtr),
+	/// Return from function. This will pop the latest address from the stack
+	/// and jump to it.
+	Return,
 }
 
 impl Instruction {
@@ -63,11 +86,20 @@ impl Instruction {
 			Self::Deref16 => 1,
 			Self::Deref32 => 1,
 			Self::Syscall(_) => 2,
-			Self::CopyCodeMemory(_, _, _) => 1 + 3 * size_of::<VmPtr>(),
+			Self::CopyCodeMemory(_, _) => 1 + 2 * size_of::<VmPtr>(),
 			Self::Data(_len, data) => {
 				assert_eq!(data.len(), native_ptr(*_len));
 				1 + size_of::<VmPtr>() + data.len()
 			}
+			Self::SwapRegisterA => 1,
+			Self::Write8 => 1,
+			Self::Write16 => 1,
+			Self::Write32 => 1,
+			Self::ReadStackPointer => 1,
+			Self::WriteStackPointer => 1,
+			Self::Jump(_) => 1 + size_of::<VmPtr>(),
+			Self::Call(_) => 1 + size_of::<VmPtr>(),
+			Self::Return => 1,
 		}
 	}
 
@@ -92,12 +124,20 @@ impl Instruction {
 			13 => Ok(Self::CopyCodeMemory(
 				read_vm_ptr(code_sub_slice(1..)?)?,
 				read_vm_ptr(code_sub_slice(5..)?)?,
-				read_vm_ptr(code_sub_slice(9..)?)?,
 			)),
 			14 => {
 				let len = read_vm_ptr(code_sub_slice(1..)?)?;
 				Ok(Self::Data(len, read_bytes(code_sub_slice(5..)?, native_ptr(len))?.to_vec()))
 			}
+			15 => Ok(Self::SwapRegisterA),
+			16 => Ok(Self::Write8),
+			17 => Ok(Self::Write16),
+			18 => Ok(Self::Write32),
+			19 => Ok(Self::ReadStackPointer),
+			20 => Ok(Self::WriteStackPointer),
+			21 => Ok(Self::Jump(read_vm_ptr(code_sub_slice(1..)?)?)),
+			22 => Ok(Self::Call(read_vm_ptr(code_sub_slice(1..)?)?)),
+			23 => Ok(Self::Return),
 			c => Err(anyhow::format_err!("Unrecognized instruction: {c}")),
 		}
 	}
@@ -143,10 +183,9 @@ impl Instruction {
 				bytes.push(12);
 				bytes.push(*index);
 			}
-			Self::CopyCodeMemory(src, target, size) => {
+			Self::CopyCodeMemory(src, size) => {
 				bytes.push(13);
 				bytes.extend_from_slice(&src.to_be_bytes());
-				bytes.extend_from_slice(&target.to_be_bytes());
 				bytes.extend_from_slice(&size.to_be_bytes());
 			}
 			Self::Data(len, data) => {
@@ -155,6 +194,21 @@ impl Instruction {
 				bytes.extend_from_slice(&len.to_be_bytes());
 				bytes.extend_from_slice(data);
 			}
+			Self::SwapRegisterA => bytes.push(15),
+			Self::Write8 => bytes.push(16),
+			Self::Write16 => bytes.push(17),
+			Self::Write32 => bytes.push(18),
+			Self::ReadStackPointer => bytes.push(19),
+			Self::WriteStackPointer => bytes.push(20),
+			Self::Jump(addr) => {
+				bytes.push(21);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::Call(addr) => {
+				bytes.push(22);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::Return => bytes.push(23),
 		}
 		bytes
 	}

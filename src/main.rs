@@ -1,24 +1,38 @@
 use my_vm::{Instruction, Machine, Program};
 
-fn hello_world_program() -> anyhow::Result<Program> {
+fn make_program() -> anyhow::Result<Program> {
 	let mut program = Program::new();
-	// No-op.
-	program.add_nop();
+	let start = program.add_dummy_jump();
 	// Add data segment to hold our string.
-	let s = program.add_data(c"Hello world!".to_bytes_with_nul());
-	// Load the data segment into machine memory at 10.
-	program.add_copy_data(s, 10)?;
-	// Set the main register to 10 to point to the address we wrote the string to.
-	program.add_instruction(Instruction::Set(10));
-	// Call syscall 0 (println).
+	let data = program.add_data(c"Hello world!".to_bytes_with_nul());
+	// Set the main register to 0 to point to the address we want to write the
+	// string to.
+	let function = program.add_instruction(Instruction::Set(0));
+	// Load the data segment into machine memory at the address in the main
+	// register.
+	program.add_copy_data(data)?;
+	// Call syscall 0 (println). Reads the string from the address in the main
+	// register.
 	program.add_syscall(0);
+	// Return from the function.
+	program.add_return();
+	// Actual main start.
+	let main = program.add_nop();
+	// Jump straight to main from start.
+	program.replace_jump_call_address(start, main)?;
+	// Call the function 5 times.
+	program.add_call(function)?;
+	program.add_call(function)?;
+	program.add_call(function)?;
+	program.add_call(function)?;
+	program.add_call(function)?;
 	// Halt the machine.
 	program.add_halt();
 	Ok(program)
 }
 
 fn main() -> anyhow::Result<()> {
-	let program = hello_world_program()?;
+	let program = make_program()?;
 	let executable = program.compile();
 
 	let mut machine = Machine::new(executable, 1024);
