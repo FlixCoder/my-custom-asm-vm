@@ -36,3 +36,8 @@ test = true
 name = "loop"
 path = "examples/loop.rs"
 test = true
+
+[[example]]
+name = "fibonacci"
+path = "examples/fibonacci.rs"
+test = true

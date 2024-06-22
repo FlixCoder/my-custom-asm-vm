@@ -45,16 +45,16 @@ pub enum Instruction {
 	CopyCodeMemory(VmPtr, VmPtr),
 	/// Data segment. Arguments: size/length, data.
 	Data(VmPtr, Vec<u8>),
-	/// Swap main register with register A.
-	SwapRegisterA,
-	/// Write the 8 bit value of register A to the address in the main register.
-	Write8,
-	/// Write the 16 bit value of register A to the address in the main
+	/// Swap main register with given side register.
+	Swap(u8),
+	/// Write the 8 bit value of register x to the address in the main register.
+	Write8(u8),
+	/// Write the 16 bit value of register x to the address in the main
 	/// register.
-	Write16,
-	/// Write the 32 bit value of register A to the address in the main
+	Write16(u8),
+	/// Write the 32 bit value of register x to the address in the main
 	/// register.
-	Write32,
+	Write32(u8),
 	/// Read stack pointer to main register.
 	ReadStackPointer,
 	/// Write main register to stack pointer.
@@ -73,13 +73,13 @@ pub enum Instruction {
 	/// Decrement the main register by one. Sets the zero flag to whether the
 	/// result is 0.
 	Decrement,
-	/// Main register += register A.
-	Add,
-	/// Main register -= register A.
-	Sub,
-	/// Compare main register with register A. Saves the comparison result in
+	/// Main register += register x.
+	Add(u8),
+	/// Main register -= register x.
+	Sub(u8),
+	/// Compare main register with register x. Saves the comparison result in
 	/// the comparison flag to be used in conditional jumps.
-	Compare,
+	Compare(u8),
 	/// Jump if the last comparison was equal.
 	JumpEqual(VmPtr),
 	/// Jump if the last comparison was not equal.
@@ -96,6 +96,14 @@ pub enum Instruction {
 	JumpZero(VmPtr),
 	/// Jump if the last increment/decrement resulted in nonzero.
 	JumpNonzero(VmPtr),
+	/// Push main register to the stack.
+	Push,
+	/// Pop from the stack to the main register.
+	Pop,
+	/// Push register x to the stack.
+	PushRegister(u8),
+	/// Pop from the stack to register x.
+	PopRegister(u8),
 }
 
 impl Instruction {
@@ -120,10 +128,10 @@ impl Instruction {
 				assert_eq!(data.len(), native_ptr(*_len));
 				1 + size_of::<VmPtr>() + data.len()
 			}
-			Self::SwapRegisterA => 1,
-			Self::Write8 => 1,
-			Self::Write16 => 1,
-			Self::Write32 => 1,
+			Self::Swap(_) => 2,
+			Self::Write8(_) => 2,
+			Self::Write16(_) => 2,
+			Self::Write32(_) => 2,
 			Self::ReadStackPointer => 1,
 			Self::WriteStackPointer => 1,
 			Self::Jump(_) => 1 + size_of::<VmPtr>(),
@@ -131,9 +139,9 @@ impl Instruction {
 			Self::Return => 1,
 			Self::Increment => 1,
 			Self::Decrement => 1,
-			Self::Add => 1,
-			Self::Sub => 1,
-			Self::Compare => 1,
+			Self::Add(_) => 2,
+			Self::Sub(_) => 2,
+			Self::Compare(_) => 2,
 			Self::JumpEqual(_) => 1 + size_of::<VmPtr>(),
 			Self::JumpNotEqual(_) => 1 + size_of::<VmPtr>(),
 			Self::JumpGreater(_) => 1 + size_of::<VmPtr>(),
@@ -142,6 +150,10 @@ impl Instruction {
 			Self::JumpLessEqual(_) => 1 + size_of::<VmPtr>(),
 			Self::JumpZero(_) => 1 + size_of::<VmPtr>(),
 			Self::JumpNonzero(_) => 1 + size_of::<VmPtr>(),
+			Self::Push => 1,
+			Self::Pop => 1,
+			Self::PushRegister(_) => 2,
+			Self::PopRegister(_) => 2,
 		}
 	}
 
@@ -171,10 +183,10 @@ impl Instruction {
 				let len = read_vm_ptr(code_sub_slice(1..)?)?;
 				Ok(Self::Data(len, read_bytes(code_sub_slice(5..)?, native_ptr(len))?.to_vec()))
 			}
-			15 => Ok(Self::SwapRegisterA),
-			16 => Ok(Self::Write8),
-			17 => Ok(Self::Write16),
-			18 => Ok(Self::Write32),
+			15 => Ok(Self::Swap(read_u8(code_sub_slice(1..)?)?)),
+			16 => Ok(Self::Write8(read_u8(code_sub_slice(1..)?)?)),
+			17 => Ok(Self::Write16(read_u8(code_sub_slice(1..)?)?)),
+			18 => Ok(Self::Write32(read_u8(code_sub_slice(1..)?)?)),
 			19 => Ok(Self::ReadStackPointer),
 			20 => Ok(Self::WriteStackPointer),
 			21 => Ok(Self::Jump(read_vm_ptr(code_sub_slice(1..)?)?)),
@@ -182,9 +194,9 @@ impl Instruction {
 			23 => Ok(Self::Return),
 			24 => Ok(Self::Increment),
 			25 => Ok(Self::Decrement),
-			26 => Ok(Self::Add),
-			27 => Ok(Self::Sub),
-			28 => Ok(Self::Compare),
+			26 => Ok(Self::Add(read_u8(code_sub_slice(1..)?)?)),
+			27 => Ok(Self::Sub(read_u8(code_sub_slice(1..)?)?)),
+			28 => Ok(Self::Compare(read_u8(code_sub_slice(1..)?)?)),
 			29 => Ok(Self::JumpEqual(read_vm_ptr(code_sub_slice(1..)?)?)),
 			30 => Ok(Self::JumpNotEqual(read_vm_ptr(code_sub_slice(1..)?)?)),
 			31 => Ok(Self::JumpGreater(read_vm_ptr(code_sub_slice(1..)?)?)),
@@ -193,6 +205,10 @@ impl Instruction {
 			34 => Ok(Self::JumpLessEqual(read_vm_ptr(code_sub_slice(1..)?)?)),
 			35 => Ok(Self::JumpZero(read_vm_ptr(code_sub_slice(1..)?)?)),
 			36 => Ok(Self::JumpNonzero(read_vm_ptr(code_sub_slice(1..)?)?)),
+			37 => Ok(Self::Push),
+			38 => Ok(Self::Pop),
+			39 => Ok(Self::PushRegister(read_u8(code_sub_slice(1..)?)?)),
+			40 => Ok(Self::PopRegister(read_u8(code_sub_slice(1..)?)?)),
 			c => Err(anyhow::format_err!("Unrecognized instruction: {c}")),
 		}
 	}
@@ -249,10 +265,22 @@ impl Instruction {
 				bytes.extend_from_slice(&len.to_be_bytes());
 				bytes.extend_from_slice(data);
 			}
-			Self::SwapRegisterA => bytes.push(15),
-			Self::Write8 => bytes.push(16),
-			Self::Write16 => bytes.push(17),
-			Self::Write32 => bytes.push(18),
+			Self::Swap(reg) => {
+				bytes.push(15);
+				bytes.push(*reg);
+			}
+			Self::Write8(reg) => {
+				bytes.push(16);
+				bytes.push(*reg);
+			}
+			Self::Write16(reg) => {
+				bytes.push(17);
+				bytes.push(*reg);
+			}
+			Self::Write32(reg) => {
+				bytes.push(18);
+				bytes.push(*reg);
+			}
 			Self::ReadStackPointer => bytes.push(19),
 			Self::WriteStackPointer => bytes.push(20),
 			Self::Jump(addr) => {
@@ -266,9 +294,18 @@ impl Instruction {
 			Self::Return => bytes.push(23),
 			Self::Increment => bytes.push(24),
 			Self::Decrement => bytes.push(25),
-			Self::Add => bytes.push(26),
-			Self::Sub => bytes.push(27),
-			Self::Compare => bytes.push(28),
+			Self::Add(reg) => {
+				bytes.push(26);
+				bytes.push(*reg);
+			}
+			Self::Sub(reg) => {
+				bytes.push(27);
+				bytes.push(*reg);
+			}
+			Self::Compare(reg) => {
+				bytes.push(28);
+				bytes.push(*reg);
+			}
 			Self::JumpEqual(addr) => {
 				bytes.push(29);
 				bytes.extend_from_slice(&addr.to_be_bytes());
@@ -300,6 +337,16 @@ impl Instruction {
 			Self::JumpNonzero(addr) => {
 				bytes.push(36);
 				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::Push => bytes.push(37),
+			Self::Pop => bytes.push(38),
+			Self::PushRegister(reg) => {
+				bytes.push(39);
+				bytes.push(*reg);
+			}
+			Self::PopRegister(reg) => {
+				bytes.push(40);
+				bytes.push(*reg);
 			}
 		}
 		bytes

@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
 	let program: Program = PROGRAM.parse()?;
 	let executable = program.compile();
 
-	let mut machine = Machine::new(executable, 1024);
+	let mut machine = Machine::<0>::new(executable, 1024);
 	machine.run()?;
 	Ok(())
 }

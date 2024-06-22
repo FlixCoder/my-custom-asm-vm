@@ -399,24 +399,28 @@ impl FromStr for Program {
 					program.add_data(cstr.into_bytes_with_nul());
 					next_index += 1;
 				}
-				// SwapRegisterA
-				"swapregistera" if parts.len() == 1 => {
-					program.add_instruction(Instruction::SwapRegisterA);
+				// Swap <register>
+				"swap" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Swap(register));
 					next_index += 1;
 				}
-				// Write8
-				"write8" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Write8);
+				// Write8 <register>
+				"write8" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Write8(register));
 					next_index += 1;
 				}
-				// Write16
-				"write16" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Write16);
+				// Write16 <register>
+				"write16" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Write16(register));
 					next_index += 1;
 				}
-				// Write32
-				"write32" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Write32);
+				// Write32 <register>
+				"write32" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Write32(register));
 					next_index += 1;
 				}
 				// ReadStackPointer
@@ -456,19 +460,22 @@ impl FromStr for Program {
 					program.add_instruction(Instruction::Decrement);
 					next_index += 1;
 				}
-				// Add
-				"add" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Add);
+				// Add <register>
+				"add" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Add(register));
 					next_index += 1;
 				}
-				// Sub
-				"sub" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Sub);
+				// Sub <register>
+				"sub" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Sub(register));
 					next_index += 1;
 				}
-				// Compare
-				"compare" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Compare);
+				// Compare <register>
+				"compare" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Compare(register));
 					next_index += 1;
 				}
 				// JumpEqual <label>
@@ -519,8 +526,34 @@ impl FromStr for Program {
 					dummy_jumps.push((index, parts[1]));
 					next_index += 1;
 				}
+				// Push
+				"push" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Push);
+					next_index += 1;
+				}
+				// Pop
+				"pop" if parts.len() == 1 => {
+					program.add_instruction(Instruction::Pop);
+					next_index += 1;
+				}
+				// PushRegister <register>
+				"pushregister" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::PushRegister(register));
+					next_index += 1;
+				}
+				// PopRegister <register>
+				"popregister" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::PopRegister(register));
+					next_index += 1;
+				}
 				// Unknown command.
-				cmd => return Err(anyhow::format_err!("Unknown command: {cmd}")),
+				cmd => {
+					return Err(anyhow::format_err!(
+						"Unknown command or wrong number of arguments: {cmd}"
+					))
+				}
 			}
 		}
 

@@ -23,7 +23,7 @@ fn main() -> anyhow::Result<()> {
 	let program = loop_program()?;
 	let executable = program.compile();
 
-	let mut machine = Machine::new(executable, 1024);
+	let mut machine = Machine::<0>::new(executable, 1024);
 	machine.run()?;
 	Ok(())
 }

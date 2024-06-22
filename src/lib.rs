@@ -17,18 +17,18 @@ pub type VmPtr = u32;
 
 /// Virtual machine for my custom binary assembler language.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Machine {
+pub struct Machine<const SIDE_REGS: usize = 4> {
 	program: Box<[u8]>,
 	memory: Box<[u8]>,
 	instruction_pointer: VmPtr,
 	stack_pointer: VmPtr,
 	main_register: VmPtr,
-	register_a: VmPtr,
+	side_registers: [VmPtr; SIDE_REGS],
 	flag_zero: bool,
 	flag_comparison: Ordering,
 }
 
-impl Machine {
+impl<const SIDE_REGS: usize> Machine<SIDE_REGS> {
 	/// Create a new virtual machine with the given program and memory size.
 	/// Stack pointer is initally at the end of the memory.
 	pub fn new(program: impl Into<Box<[u8]>>, memory_size: VmPtr) -> Self {
@@ -38,7 +38,7 @@ impl Machine {
 			instruction_pointer: 0,
 			stack_pointer: memory_size,
 			main_register: 0,
-			register_a: 0,
+			side_registers: [0; SIDE_REGS],
 			flag_zero: true,
 			flag_comparison: Ordering::Equal,
 		}
@@ -56,6 +56,23 @@ impl Machine {
 		self.memory
 			.get_mut(native_ptr(ptr)..)
 			.with_context(|| format!("Out of memory access occured at {ptr}"))
+	}
+
+	/// Get side register value.
+	fn side_register(&self, reg: u8) -> anyhow::Result<VmPtr> {
+		let register: usize = reg.into();
+		self.side_registers
+			.get(register)
+			.copied()
+			.with_context(|| format!("Side register {reg} out of bounds"))
+	}
+
+	/// Get side register mut.
+	fn side_register_mut(&mut self, reg: u8) -> anyhow::Result<&mut VmPtr> {
+		let register: usize = reg.into();
+		self.side_registers
+			.get_mut(register)
+			.with_context(|| format!("Side register {reg} out of bounds"))
 	}
 
 	/// Make a syscall at the current state.
@@ -157,21 +174,27 @@ impl Machine {
 					.with_context(|| format!("Out of memory access occurred at {target}"))?;
 				target.copy_from_slice(source);
 			}
-			Instruction::SwapRegisterA => {
-				std::mem::swap(&mut self.main_register, &mut self.register_a)
+			Instruction::Swap(reg) => {
+				let register: usize = reg.into();
+				std::mem::swap(
+					&mut self.main_register,
+					self.side_registers
+						.get_mut(register)
+						.with_context(|| format!("Side register {reg} out of bounds"))?,
+				)
 			}
-			Instruction::Write8 => {
-				let value = self.register_a as u8;
+			Instruction::Write8(reg) => {
+				let value = self.side_register(reg)? as u8;
 				let mem = self.memory_mut(self.main_register)?;
 				write_u8(mem, value)?;
 			}
-			Instruction::Write16 => {
-				let value = self.register_a as u16;
+			Instruction::Write16(reg) => {
+				let value = self.side_register(reg)? as u16;
 				let mem = self.memory_mut(self.main_register)?;
 				write_u16(mem, value)?;
 			}
-			Instruction::Write32 => {
-				let value = self.register_a as u32;
+			Instruction::Write32(reg) => {
+				let value = self.side_register(reg)? as u32;
 				let mem = self.memory_mut(self.main_register)?;
 				write_u32(mem, value)?;
 			}
@@ -204,13 +227,15 @@ impl Machine {
 				self.main_register = self.main_register.wrapping_sub(1);
 				self.flag_zero = self.main_register == 0;
 			}
-			Instruction::Add => {
-				self.main_register = self.main_register.wrapping_add(self.register_a)
+			Instruction::Add(reg) => {
+				self.main_register = self.main_register.wrapping_add(self.side_register(reg)?)
 			}
-			Instruction::Sub => {
-				self.main_register = self.main_register.wrapping_sub(self.register_a)
+			Instruction::Sub(reg) => {
+				self.main_register = self.main_register.wrapping_sub(self.side_register(reg)?)
 			}
-			Instruction::Compare => self.flag_comparison = self.main_register.cmp(&self.register_a),
+			Instruction::Compare(reg) => {
+				self.flag_comparison = self.main_register.cmp(&self.side_register(reg)?)
+			}
 			Instruction::JumpEqual(addr) => {
 				if self.flag_comparison == Ordering::Equal {
 					self.instruction_pointer = addr;
@@ -250,6 +275,42 @@ impl Machine {
 				if !self.flag_zero {
 					self.instruction_pointer = addr;
 				}
+			}
+			Instruction::Push => {
+				self.stack_pointer = self
+					.stack_pointer
+					.checked_sub(vm_ptr(size_of::<VmPtr>()))
+					.context("Stack overflow")?;
+				let value = self.main_register;
+				let mem = self.memory_mut(self.stack_pointer)?;
+				write_vm_ptr(mem, value)?;
+			}
+			Instruction::Pop => {
+				let mem = self.memory(self.stack_pointer)?;
+				self.main_register = read_vm_ptr(mem)?;
+				self.stack_pointer = self
+					.stack_pointer
+					.checked_add(vm_ptr(size_of::<VmPtr>()))
+					.context("Stack underflow")?;
+			}
+			Instruction::PushRegister(reg) => {
+				self.stack_pointer = self
+					.stack_pointer
+					.checked_sub(vm_ptr(size_of::<VmPtr>()))
+					.context("Stack overflow")?;
+				let value = self.side_register(reg)?;
+				let mem = self.memory_mut(self.stack_pointer)?;
+				write_vm_ptr(mem, value)?;
+			}
+			Instruction::PopRegister(reg) => {
+				let mem = self.memory(self.stack_pointer)?;
+				let value = read_vm_ptr(mem)?;
+				let register = self.side_register_mut(reg)?;
+				*register = value;
+				self.stack_pointer = self
+					.stack_pointer
+					.checked_add(vm_ptr(size_of::<VmPtr>()))
+					.context("Stack underflow")?;
 			}
 		}
 		Ok(true)
