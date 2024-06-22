@@ -67,6 +67,35 @@ pub enum Instruction {
 	/// Return from function. This will pop the latest address from the stack
 	/// and jump to it.
 	Return,
+	/// Increment the main register by one. Sets the zero flag to whether the
+	/// result is 0.
+	Increment,
+	/// Decrement the main register by one. Sets the zero flag to whether the
+	/// result is 0.
+	Decrement,
+	/// Main register += register A.
+	Add,
+	/// Main register -= register A.
+	Sub,
+	/// Compare main register with register A. Saves the comparison result in
+	/// the comparison flag to be used in conditional jumps.
+	Compare,
+	/// Jump if the last comparison was equal.
+	JumpEqual(VmPtr),
+	/// Jump if the last comparison was not equal.
+	JumpNotEqual(VmPtr),
+	/// Jump if the last comparison was greater than.
+	JumpGreater(VmPtr),
+	/// Jump if the last comparison was less than.
+	JumpLess(VmPtr),
+	/// Jump if the last comparison was greater than or equal.
+	JumpGreaterEqual(VmPtr),
+	/// Jump if the last comparison was less than or equal.
+	JumpLessEqual(VmPtr),
+	/// Jump if the last increment/decrement resulted in zero.
+	JumpZero(VmPtr),
+	/// Jump if the last increment/decrement resulted in nonzero.
+	JumpNonzero(VmPtr),
 }
 
 impl Instruction {
@@ -100,6 +129,19 @@ impl Instruction {
 			Self::Jump(_) => 1 + size_of::<VmPtr>(),
 			Self::Call(_) => 1 + size_of::<VmPtr>(),
 			Self::Return => 1,
+			Self::Increment => 1,
+			Self::Decrement => 1,
+			Self::Add => 1,
+			Self::Sub => 1,
+			Self::Compare => 1,
+			Self::JumpEqual(_) => 1 + size_of::<VmPtr>(),
+			Self::JumpNotEqual(_) => 1 + size_of::<VmPtr>(),
+			Self::JumpGreater(_) => 1 + size_of::<VmPtr>(),
+			Self::JumpLess(_) => 1 + size_of::<VmPtr>(),
+			Self::JumpGreaterEqual(_) => 1 + size_of::<VmPtr>(),
+			Self::JumpLessEqual(_) => 1 + size_of::<VmPtr>(),
+			Self::JumpZero(_) => 1 + size_of::<VmPtr>(),
+			Self::JumpNonzero(_) => 1 + size_of::<VmPtr>(),
 		}
 	}
 
@@ -138,6 +180,19 @@ impl Instruction {
 			21 => Ok(Self::Jump(read_vm_ptr(code_sub_slice(1..)?)?)),
 			22 => Ok(Self::Call(read_vm_ptr(code_sub_slice(1..)?)?)),
 			23 => Ok(Self::Return),
+			24 => Ok(Self::Increment),
+			25 => Ok(Self::Decrement),
+			26 => Ok(Self::Add),
+			27 => Ok(Self::Sub),
+			28 => Ok(Self::Compare),
+			29 => Ok(Self::JumpEqual(read_vm_ptr(code_sub_slice(1..)?)?)),
+			30 => Ok(Self::JumpNotEqual(read_vm_ptr(code_sub_slice(1..)?)?)),
+			31 => Ok(Self::JumpGreater(read_vm_ptr(code_sub_slice(1..)?)?)),
+			32 => Ok(Self::JumpLess(read_vm_ptr(code_sub_slice(1..)?)?)),
+			33 => Ok(Self::JumpGreaterEqual(read_vm_ptr(code_sub_slice(1..)?)?)),
+			34 => Ok(Self::JumpLessEqual(read_vm_ptr(code_sub_slice(1..)?)?)),
+			35 => Ok(Self::JumpZero(read_vm_ptr(code_sub_slice(1..)?)?)),
+			36 => Ok(Self::JumpNonzero(read_vm_ptr(code_sub_slice(1..)?)?)),
 			c => Err(anyhow::format_err!("Unrecognized instruction: {c}")),
 		}
 	}
@@ -209,6 +264,43 @@ impl Instruction {
 				bytes.extend_from_slice(&addr.to_be_bytes());
 			}
 			Self::Return => bytes.push(23),
+			Self::Increment => bytes.push(24),
+			Self::Decrement => bytes.push(25),
+			Self::Add => bytes.push(26),
+			Self::Sub => bytes.push(27),
+			Self::Compare => bytes.push(28),
+			Self::JumpEqual(addr) => {
+				bytes.push(29);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::JumpNotEqual(addr) => {
+				bytes.push(30);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::JumpGreater(addr) => {
+				bytes.push(31);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::JumpLess(addr) => {
+				bytes.push(32);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::JumpGreaterEqual(addr) => {
+				bytes.push(33);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::JumpLessEqual(addr) => {
+				bytes.push(34);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::JumpZero(addr) => {
+				bytes.push(35);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
+			Self::JumpNonzero(addr) => {
+				bytes.push(36);
+				bytes.extend_from_slice(&addr.to_be_bytes());
+			}
 		}
 		bytes
 	}

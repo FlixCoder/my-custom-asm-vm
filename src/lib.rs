@@ -2,7 +2,7 @@ mod instruction;
 mod program;
 mod util;
 
-use std::mem::size_of;
+use std::{cmp::Ordering, mem::size_of};
 
 use anyhow::Context;
 use util::{
@@ -24,6 +24,8 @@ pub struct Machine {
 	stack_pointer: VmPtr,
 	main_register: VmPtr,
 	register_a: VmPtr,
+	flag_zero: bool,
+	flag_comparison: Ordering,
 }
 
 impl Machine {
@@ -37,6 +39,8 @@ impl Machine {
 			stack_pointer: memory_size,
 			main_register: 0,
 			register_a: 0,
+			flag_zero: true,
+			flag_comparison: Ordering::Equal,
 		}
 	}
 
@@ -57,7 +61,9 @@ impl Machine {
 	/// Make a syscall at the current state.
 	///
 	/// Available syscalls:
-	/// - 0: Print the string referenced by the main register.
+	/// - 0: Print line with the string referenced by the main register.
+	/// - 1: Print the number in the main register.
+	/// - 2: Print the string referenced by the main registern.
 	fn syscall(&mut self, index: u8) -> anyhow::Result<()> {
 		match index {
 			0 => {
@@ -67,6 +73,17 @@ impl Machine {
 					format!("Accessed invalid string at {}", self.main_register)
 				})?;
 				println!("{s}");
+			}
+			1 => {
+				print!("{}", self.main_register);
+			}
+			2 => {
+				let mem = self.memory(self.main_register)?;
+				let cstr = read_cstr(mem)?;
+				let s = cstr.to_str().with_context(|| {
+					format!("Accessed invalid string at {}", self.main_register)
+				})?;
+				print!("{s}");
 			}
 			_ => return Err(anyhow::format_err!("Unknown syscall {index}")),
 		}
@@ -178,6 +195,61 @@ impl Machine {
 					.stack_pointer
 					.checked_add(vm_ptr(size_of::<VmPtr>()))
 					.context("Stack underflow")?;
+			}
+			Instruction::Increment => {
+				self.main_register = self.main_register.wrapping_add(1);
+				self.flag_zero = self.main_register == 0;
+			}
+			Instruction::Decrement => {
+				self.main_register = self.main_register.wrapping_sub(1);
+				self.flag_zero = self.main_register == 0;
+			}
+			Instruction::Add => {
+				self.main_register = self.main_register.wrapping_add(self.register_a)
+			}
+			Instruction::Sub => {
+				self.main_register = self.main_register.wrapping_sub(self.register_a)
+			}
+			Instruction::Compare => self.flag_comparison = self.main_register.cmp(&self.register_a),
+			Instruction::JumpEqual(addr) => {
+				if self.flag_comparison == Ordering::Equal {
+					self.instruction_pointer = addr;
+				}
+			}
+			Instruction::JumpNotEqual(addr) => {
+				if self.flag_comparison != Ordering::Equal {
+					self.instruction_pointer = addr;
+				}
+			}
+			Instruction::JumpGreater(addr) => {
+				if self.flag_comparison == Ordering::Greater {
+					self.instruction_pointer = addr;
+				}
+			}
+			Instruction::JumpLess(addr) => {
+				if self.flag_comparison == Ordering::Less {
+					self.instruction_pointer = addr;
+				}
+			}
+			Instruction::JumpGreaterEqual(addr) => {
+				if self.flag_comparison != Ordering::Less {
+					self.instruction_pointer = addr;
+				}
+			}
+			Instruction::JumpLessEqual(addr) => {
+				if self.flag_comparison != Ordering::Greater {
+					self.instruction_pointer = addr;
+				}
+			}
+			Instruction::JumpZero(addr) => {
+				if self.flag_zero {
+					self.instruction_pointer = addr;
+				}
+			}
+			Instruction::JumpNonzero(addr) => {
+				if !self.flag_zero {
+					self.instruction_pointer = addr;
+				}
 			}
 		}
 		Ok(true)

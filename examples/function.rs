@@ -19,7 +19,7 @@ fn function_program() -> anyhow::Result<Program> {
 	// Actual main start.
 	let main = program.add_nop();
 	// Jump straight to main from start.
-	program.replace_jump_call_address(start, main)?;
+	program.replace_dummy_address(start, main)?;
 	// Call the function 5 times.
 	program.add_call(function)?;
 	program.add_call(function)?;

@@ -1,6 +1,6 @@
 use my_vm::{Instruction, Machine, Program};
 
-fn make_program() -> anyhow::Result<Program> {
+fn loop_program() -> anyhow::Result<Program> {
 	let mut program = Program::new();
 	// Set main register to 5.
 	program.add_instruction(Instruction::Set(5));
@@ -20,7 +20,7 @@ fn make_program() -> anyhow::Result<Program> {
 }
 
 fn main() -> anyhow::Result<()> {
-	let program = make_program()?;
+	let program = loop_program()?;
 	let executable = program.compile();
 
 	let mut machine = Machine::new(executable, 1024);

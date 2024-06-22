@@ -82,7 +82,8 @@ impl Program {
 		Ok(index)
 	}
 
-	/// Add dummy jump instruction to the program. Return the index of this
+	/// Add dummy jump instruction to the program, that can and should later be
+	/// altered to the correct jump address. Return the index of this
 	/// instruction to be used by jumps or calls.
 	pub fn add_dummy_jump(&mut self) -> usize {
 		self.add_instruction(Instruction::Jump(VmPtr::MAX))
@@ -96,33 +97,166 @@ impl Program {
 		Ok(index)
 	}
 
-	/// Add dummy call instruction to the program. Return the index of this
+	/// Add dummy call instruction to the program, that can and should later be
+	/// altered to the correct call address. Return the index of this
 	/// instruction to be used by jumps or calls.
 	pub fn add_dummy_call(&mut self) -> usize {
 		self.add_instruction(Instruction::Call(VmPtr::MAX))
-	}
-
-	/// Replace a jump address in an instruction in the program. This is useful
-	/// when adding a dummy jump or call, because the code that we want to jump
-	/// to does not exist yet.
-	pub fn replace_jump_call_address(
-		&mut self,
-		index: usize,
-		jump_index: usize,
-	) -> anyhow::Result<()> {
-		let (addr, _) = self.resolve(jump_index).context("Invalid jump index")?;
-		let instruction = self.instructions.get_mut(index).context("Invalid instruction index")?;
-		match instruction {
-			Instruction::Jump(jump) => *jump = addr,
-			Instruction::Call(jump) => *jump = addr,
-			_ => return Err(anyhow::format_err!("Instruction is not a jump or call")),
-		}
-		Ok(())
 	}
 
 	/// Add an instruction to the program that returns from a call. Return the
 	/// index of this instruction to be used by jumps or calls.
 	pub fn add_return(&mut self) -> usize {
 		self.add_instruction(Instruction::Return)
+	}
+
+	/// Add an instruction to the program that jumps to the indexed instruction
+	/// if the last comparison was equal. Return the index of this instruction
+	/// to be used by jumps or calls.
+	pub fn add_jump_equal(&mut self, index: usize) -> anyhow::Result<usize> {
+		let (addr, _) = self.resolve(index).context("Invalid instruction index")?;
+		let index = self.add_instruction(Instruction::JumpEqual(addr));
+		Ok(index)
+	}
+
+	/// Add dummy jump equal instruction to the program, that can and should
+	/// later be altered to the correct jump address. Return the index of this
+	/// instruction to be used by jumps or calls.
+	pub fn add_dummy_jump_equal(&mut self) -> usize {
+		self.add_instruction(Instruction::JumpEqual(VmPtr::MAX))
+	}
+
+	/// Add an instruction to the program that jumps to the indexed instruction
+	/// if the last comparison was not equal. Return the index of this
+	/// instruction to be used by jumps or calls.
+	pub fn add_jump_not_equal(&mut self, index: usize) -> anyhow::Result<usize> {
+		let (addr, _) = self.resolve(index).context("Invalid instruction index")?;
+		let index = self.add_instruction(Instruction::JumpNotEqual(addr));
+		Ok(index)
+	}
+
+	/// Add dummy jump not equal instruction to the program, that can and should
+	/// later be altered to the correct jump address. Return the index of this
+	/// instruction to be used by jumps or calls.
+	pub fn add_dummy_jump_not_equal(&mut self) -> usize {
+		self.add_instruction(Instruction::JumpNotEqual(VmPtr::MAX))
+	}
+
+	/// Add an instruction to the program that jumps to the indexed instruction
+	/// if the last comparison was greater. Return the index of this instruction
+	/// to be used by jumps or calls.
+	pub fn add_jump_greater(&mut self, index: usize) -> anyhow::Result<usize> {
+		let (addr, _) = self.resolve(index).context("Invalid instruction index")?;
+		let index = self.add_instruction(Instruction::JumpGreater(addr));
+		Ok(index)
+	}
+
+	/// Add dummy jump greater instruction to the program, that can and should
+	/// later be altered to the correct jump address. Return the index of this
+	/// instruction to be used by jumps or calls.
+	pub fn add_dummy_jump_greater(&mut self) -> usize {
+		self.add_instruction(Instruction::JumpGreater(VmPtr::MAX))
+	}
+
+	/// Add an instruction to the program that jumps to the indexed instruction
+	/// if the last comparison was less. Return the index of this instruction
+	/// to be used by jumps or calls.
+	pub fn add_jump_less(&mut self, index: usize) -> anyhow::Result<usize> {
+		let (addr, _) = self.resolve(index).context("Invalid instruction index")?;
+		let index = self.add_instruction(Instruction::JumpLess(addr));
+		Ok(index)
+	}
+
+	/// Add dummy jump less instruction to the program, that can and should
+	/// later be altered to the correct jump address. Return the index of this
+	/// instruction to be used by jumps or calls.
+	pub fn add_dummy_jump_less(&mut self) -> usize {
+		self.add_instruction(Instruction::JumpLess(VmPtr::MAX))
+	}
+
+	/// Add an instruction to the program that jumps to the indexed instruction
+	/// if the last comparison was greater or equal. Return the index of this
+	/// instruction to be used by jumps or calls.
+	pub fn add_jump_greater_equal(&mut self, index: usize) -> anyhow::Result<usize> {
+		let (addr, _) = self.resolve(index).context("Invalid instruction index")?;
+		let index = self.add_instruction(Instruction::JumpGreaterEqual(addr));
+		Ok(index)
+	}
+
+	/// Add dummy jump greater equal instruction to the program, that can and
+	/// should later be altered to the correct jump address. Return the index
+	/// of this instruction to be used by jumps or calls.
+	pub fn add_dummy_jump_greater_equal(&mut self) -> usize {
+		self.add_instruction(Instruction::JumpGreaterEqual(VmPtr::MAX))
+	}
+
+	/// Add an instruction to the program that jumps to the indexed instruction
+	/// if the last comparison was less or equal. Return the index of this
+	/// instruction to be used by jumps or calls.
+	pub fn add_jump_less_equal(&mut self, index: usize) -> anyhow::Result<usize> {
+		let (addr, _) = self.resolve(index).context("Invalid instruction index")?;
+		let index = self.add_instruction(Instruction::JumpLessEqual(addr));
+		Ok(index)
+	}
+
+	/// Add dummy jump less equal instruction to the program, that can and
+	/// should later be altered to the correct jump address. Return the index
+	/// of this instruction to be used by jumps or calls.
+	pub fn add_dummy_jump_less_equal(&mut self) -> usize {
+		self.add_instruction(Instruction::JumpLessEqual(VmPtr::MAX))
+	}
+
+	/// Add an instruction to the program that jumps to the indexed instruction
+	/// if the last increment/decrement resulted in zero. Return the index of
+	/// this instruction to be used by jumps or calls.
+	pub fn add_jump_zero(&mut self, index: usize) -> anyhow::Result<usize> {
+		let (addr, _) = self.resolve(index).context("Invalid instruction index")?;
+		let index = self.add_instruction(Instruction::JumpZero(addr));
+		Ok(index)
+	}
+
+	/// Add dummy jump zero instruction to the program, that can and
+	/// should later be altered to the correct jump address. Return the index
+	/// of this instruction to be used by jumps or calls.
+	pub fn add_dummy_jump_zero(&mut self) -> usize {
+		self.add_instruction(Instruction::JumpZero(VmPtr::MAX))
+	}
+
+	/// Add an instruction to the program that jumps to the indexed instruction
+	/// if the last increment/decrement resulted in nonzero. Return the index of
+	/// this instruction to be used by jumps or calls.
+	pub fn add_jump_nonzero(&mut self, index: usize) -> anyhow::Result<usize> {
+		let (addr, _) = self.resolve(index).context("Invalid instruction index")?;
+		let index = self.add_instruction(Instruction::JumpNonzero(addr));
+		Ok(index)
+	}
+
+	/// Add dummy jump nonzero instruction to the program, that can and
+	/// should later be altered to the correct jump address. Return the index
+	/// of this instruction to be used by jumps or calls.
+	pub fn add_dummy_jump_nonzero(&mut self) -> usize {
+		self.add_instruction(Instruction::JumpNonzero(VmPtr::MAX))
+	}
+
+	/// Replace a dummy jump/call address with a real address. This is useful
+	/// when the code that we want to jump to does not exist yet in the
+	/// program.
+	pub fn replace_dummy_address(&mut self, index: usize, jump_index: usize) -> anyhow::Result<()> {
+		let (addr, _) = self.resolve(jump_index).context("Invalid jump index")?;
+		let instruction = self.instructions.get_mut(index).context("Invalid instruction index")?;
+		match instruction {
+			Instruction::Call(jump)
+			| Instruction::Jump(jump)
+			| Instruction::JumpEqual(jump)
+			| Instruction::JumpNotEqual(jump)
+			| Instruction::JumpLess(jump)
+			| Instruction::JumpGreater(jump)
+			| Instruction::JumpGreaterEqual(jump)
+			| Instruction::JumpLessEqual(jump)
+			| Instruction::JumpZero(jump)
+			| Instruction::JumpNonzero(jump) => *jump = addr,
+			_ => return Err(anyhow::format_err!("Instruction is not a jump or call")),
+		}
+		Ok(())
 	}
 }
