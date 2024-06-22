@@ -41,3 +41,8 @@ test = true
 name = "fibonacci"
 path = "examples/fibonacci.rs"
 test = true
+
+[[example]]
+name = "sprintf"
+path = "examples/sprintf.rs"
+test = true

@@ -148,16 +148,19 @@ impl<const SIDE_REGS: usize> Machine<SIDE_REGS> {
 				write_u32(mem, value)?;
 			}
 			Instruction::Set(value) => self.main_register = value,
-			Instruction::Deref8 => {
-				let mem = self.memory(self.main_register)?;
+			Instruction::Deref8(reg) => {
+				let ptr = self.side_register(reg)?;
+				let mem = self.memory(ptr)?;
 				self.main_register = read_u8(mem)?.into();
 			}
-			Instruction::Deref16 => {
-				let mem = self.memory(self.main_register)?;
+			Instruction::Deref16(reg) => {
+				let ptr = self.side_register(reg)?;
+				let mem = self.memory(ptr)?;
 				self.main_register = read_u16(mem)?.into();
 			}
-			Instruction::Deref32 => {
-				let mem = self.memory(self.main_register)?;
+			Instruction::Deref32(reg) => {
+				let ptr = self.side_register(reg)?;
+				let mem = self.memory(ptr)?;
 				self.main_register = read_u32(mem)?.into();
 			}
 			Instruction::Syscall(index) => self.syscall(index)?,
@@ -311,6 +314,19 @@ impl<const SIDE_REGS: usize> Machine<SIDE_REGS> {
 					.stack_pointer
 					.checked_add(vm_ptr(size_of::<VmPtr>()))
 					.context("Stack underflow")?;
+			}
+			Instruction::Mul(reg) => {
+				self.main_register = self.main_register.wrapping_mul(self.side_register(reg)?)
+			}
+			Instruction::Div(reg) => {
+				let value = self.main_register;
+				let register = self.side_register_mut(reg)?;
+				if *register == 0 {
+					anyhow::bail!("Division by zero");
+				}
+				let divisor = *register;
+				*register = value % divisor;
+				self.main_register = value / divisor;
 			}
 		}
 		Ok(true)

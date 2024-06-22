@@ -1,3 +1,6 @@
+use my_vm::{Machine, Program};
+
+const PROGRAM: &str = r#"
 # Start from main.
 jump main
 
@@ -233,3 +236,19 @@ call sprintf
 set 100
 syscall 0
 halt
+"#;
+
+fn main() -> anyhow::Result<()> {
+	let program: Program = PROGRAM.parse()?;
+	let executable = program.compile();
+
+	// Machine with 4 side registers and 1024 bytes memory.
+	let mut machine = Machine::<4>::new(executable, 1024);
+	machine.run()?;
+	Ok(())
+}
+
+#[test]
+fn test() {
+	main().unwrap();
+}

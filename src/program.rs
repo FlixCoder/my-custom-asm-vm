@@ -366,19 +366,22 @@ impl FromStr for Program {
 					program.add_instruction(Instruction::Set(value));
 					next_index += 1;
 				}
-				// Deref8
-				"deref8" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Deref8);
+				// Deref8 <register>
+				"deref8" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Deref8(register));
 					next_index += 1;
 				}
-				// Deref16
-				"deref16" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Deref16);
+				// Deref16 <register>
+				"deref16" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Deref16(register));
 					next_index += 1;
 				}
-				// Deref32
-				"deref32" if parts.len() == 1 => {
-					program.add_instruction(Instruction::Deref32);
+				// Deref32 <register>
+				"deref32" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Deref32(register));
 					next_index += 1;
 				}
 				// Syscall <id>
@@ -546,6 +549,18 @@ impl FromStr for Program {
 				"popregister" if parts.len() == 2 => {
 					let register = parts[1].parse()?;
 					program.add_instruction(Instruction::PopRegister(register));
+					next_index += 1;
+				}
+				// Mul <register>
+				"mul" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Mul(register));
+					next_index += 1;
+				}
+				// Div <register>
+				"div" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::Div(register));
 					next_index += 1;
 				}
 				// Unknown command.

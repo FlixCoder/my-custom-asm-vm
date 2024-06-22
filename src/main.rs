@@ -6,7 +6,7 @@ fn main() -> anyhow::Result<()> {
 	let program = asm.parse::<Program>()?;
 	let executable = program.compile();
 
-	let mut machine = Machine::<8>::new(executable, 1024);
+	let mut machine = Machine::<8>::new(executable, 4096);
 	machine.run()?;
 	Ok(())
 }
