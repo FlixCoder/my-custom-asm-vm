@@ -14,9 +14,7 @@ jump main
 # Modifies the side registers 0 and 1.
 label fibonacci
 # If n < 2, return 1.
-swap 0
-set 2
-swap 0
+setRegister 0 2
 compare 0
 jumpGreater fibonacci_continue
 set 1
@@ -46,7 +44,7 @@ syscall 0
 pop
 return
 
-# Main.
+# Main: Get fibonacci number of 15 and print it. It is 610.
 label main
 set 15
 call fibonacci
