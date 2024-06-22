@@ -28,8 +28,15 @@ pub enum Instruction {
 	Store32(VmPtr),
 	/// Set main register to the given value.
 	Set(VmPtr),
-	/// Dereference the pointer in the main register to the value it points to.
-	Deref,
+	/// Dereference the pointer in the main register to the 8 bit value it
+	/// points to.
+	Deref8,
+	/// Dereference the pointer in the main register to the 16 bit value it
+	/// points to.
+	Deref16,
+	/// Dereference the pointer in the main register to the 32 bit value it
+	/// points to.
+	Deref32,
 	/// Make a syscall to the given syscall index. The main register can be used
 	/// to give arguments to the syscall, but handling differs across syscalls.
 	Syscall(u8),
@@ -52,7 +59,9 @@ impl Instruction {
 			Self::Load32(_) => 1 + size_of::<VmPtr>(),
 			Self::Store32(_) => 1 + size_of::<VmPtr>(),
 			Self::Set(_) => 1 + size_of::<VmPtr>(),
-			Self::Deref => 1,
+			Self::Deref8 => 1,
+			Self::Deref16 => 1,
+			Self::Deref32 => 1,
 			Self::Syscall(_) => 2,
 			Self::CopyCodeMemory(_, _, _) => 1 + 3 * size_of::<VmPtr>(),
 			Self::Data(_len, data) => {
@@ -76,14 +85,16 @@ impl Instruction {
 			6 => Ok(Self::Load32(read_vm_ptr(code_sub_slice(1..)?)?)),
 			7 => Ok(Self::Store32(read_vm_ptr(code_sub_slice(1..)?)?)),
 			8 => Ok(Self::Set(read_vm_ptr(code_sub_slice(1..)?)?)),
-			9 => Ok(Self::Deref),
-			10 => Ok(Self::Syscall(read_u8(code_sub_slice(1..)?)?)),
-			11 => Ok(Self::CopyCodeMemory(
+			9 => Ok(Self::Deref8),
+			10 => Ok(Self::Deref16),
+			11 => Ok(Self::Deref32),
+			12 => Ok(Self::Syscall(read_u8(code_sub_slice(1..)?)?)),
+			13 => Ok(Self::CopyCodeMemory(
 				read_vm_ptr(code_sub_slice(1..)?)?,
 				read_vm_ptr(code_sub_slice(5..)?)?,
 				read_vm_ptr(code_sub_slice(9..)?)?,
 			)),
-			12 => {
+			14 => {
 				let len = read_vm_ptr(code_sub_slice(1..)?)?;
 				Ok(Self::Data(len, read_bytes(code_sub_slice(5..)?, native_ptr(len))?.to_vec()))
 			}
@@ -125,20 +136,22 @@ impl Instruction {
 				bytes.push(8);
 				bytes.extend_from_slice(&ptr.to_be_bytes());
 			}
-			Self::Deref => bytes.push(9),
+			Self::Deref8 => bytes.push(9),
+			Self::Deref16 => bytes.push(10),
+			Self::Deref32 => bytes.push(11),
 			Self::Syscall(index) => {
-				bytes.push(10);
+				bytes.push(12);
 				bytes.push(*index);
 			}
 			Self::CopyCodeMemory(src, target, size) => {
-				bytes.push(11);
+				bytes.push(13);
 				bytes.extend_from_slice(&src.to_be_bytes());
 				bytes.extend_from_slice(&target.to_be_bytes());
 				bytes.extend_from_slice(&size.to_be_bytes());
 			}
 			Self::Data(len, data) => {
 				assert_eq!(data.len(), native_ptr(*len));
-				bytes.push(12);
+				bytes.push(14);
 				bytes.extend_from_slice(&len.to_be_bytes());
 				bytes.extend_from_slice(data);
 			}

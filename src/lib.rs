@@ -4,8 +4,7 @@ mod util;
 
 use anyhow::Context;
 use util::{
-	native_ptr, read_cstr, read_u16, read_u32, read_u8, read_vm_ptr, vm_ptr, write_u16, write_u32,
-	write_u8,
+	native_ptr, read_cstr, read_u16, read_u32, read_u8, vm_ptr, write_u16, write_u32, write_u8,
 };
 
 pub use crate::{instruction::Instruction, program::Program};
@@ -107,9 +106,17 @@ impl Machine {
 				write_u32(mem, value)?;
 			}
 			Instruction::Set(value) => self.main_register = value,
-			Instruction::Deref => {
+			Instruction::Deref8 => {
 				let mem = self.memory(self.main_register)?;
-				self.main_register = read_vm_ptr(mem)?;
+				self.main_register = read_u8(mem)?.into();
+			}
+			Instruction::Deref16 => {
+				let mem = self.memory(self.main_register)?;
+				self.main_register = read_u16(mem)?.into();
+			}
+			Instruction::Deref32 => {
+				let mem = self.memory(self.main_register)?;
+				self.main_register = read_u32(mem)?.into();
 			}
 			Instruction::Syscall(index) => self.syscall(index)?,
 			Instruction::CopyCodeMemory(source, target, size) => {
