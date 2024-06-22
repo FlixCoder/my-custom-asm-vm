@@ -563,6 +563,25 @@ impl FromStr for Program {
 					program.add_instruction(Instruction::Div(register));
 					next_index += 1;
 				}
+				// IncrementRegister <register>
+				"incrementregister" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::IncrementRegister(register));
+					next_index += 1;
+				}
+				// DecrementRegister <register>
+				"decrementregister" if parts.len() == 2 => {
+					let register = parts[1].parse()?;
+					program.add_instruction(Instruction::DecrementRegister(register));
+					next_index += 1;
+				}
+				// SetRegister <register> <value>
+				"setregister" if parts.len() == 3 => {
+					let register = parts[1].parse()?;
+					let value = parts[2].parse()?;
+					program.add_instruction(Instruction::SetRegister(register, value));
+					next_index += 1;
+				}
 				// Unknown command.
 				cmd => {
 					return Err(anyhow::format_err!(

@@ -10,38 +10,27 @@ jump main
 # Uses side registers 0-3.
 label itoa
 # Set up.
-swap 2
-set 48
-swap 3
-set 0
-swap 2
+setRegister 2 0
+setRegister 3 48
 # Loop: Divide the number by 10 and write the remainder to the string.
 # r0: Memory address of the string.
 # r1: Divisor/remainder.
 # r2: Counter of characters.
 # r3: '0'=48 to make numbers to characters.
 label itoa_loop_1
-swap 1
-set 10
-swap 1
+setRegister 1 10
 div 1
 swap 1
 add 3
+write8 0
 swap 1
-swap 0
-write8 1
-increment
-swap 0
-swap 2
-increment
-swap 2
+incrementRegister 0
+incrementRegister 2
 increment
 decrement
 jumpNonzero itoa_loop_1
-# Write 0 to the end of the string (r0 is currently 0).
-swap 0
+# Write 0 to the end of the string (main register is currently 0).
 write8 0
-swap 0
 # We are done if there is only 1 character.
 set 1
 compare 2
@@ -54,12 +43,9 @@ return
 # r2: Counter of characters.
 # r3: Intermediate character value.
 label itoa_reverse
-set 1
 swap 3
-swap 0
-push
-decrement
-swap 0
+pushRegister 0
+decrementRegister 0
 pop
 sub 2
 swap 1
@@ -67,12 +53,11 @@ label itoa_loop_2
 deref8 0
 swap 3
 deref8 1
-swap 0
 write8 0
-decrement
-swap 0
+decrementRegister 0
+swap 3
+write8 1
 swap 1
-write8 3
 increment
 compare 0
 swap 1
@@ -90,24 +75,16 @@ return
 # r3: 0 for comparison.
 label copy_str
 swap 1
-set 0
-swap 2
-set 0
-swap 3
+setRegister 2 0
+setRegister 3 0
 jump copy_str_first_iteration
 label copy_str_loop
-swap 2
-increment
-swap 2
+incrementRegister 2
 label copy_str_first_iteration
 deref8 1
-swap 1
-increment
-swap 1
-swap 0
+incrementRegister 1
 write8 0
-increment
-swap 0
+incrementRegister 0
 compare 3
 jumpNotEqual copy_str_loop
 swap 2
@@ -126,21 +103,15 @@ label sprintf
 swap 2
 # Loop: copy characters from format string to target string, but insert arguments when it should.
 label sprintf_loop
-set 37
-swap 3
+setRegister 3 37
 deref8 0
-swap 0
-increment
-swap 0
+incrementRegister 0
 compare 3
 jumpNotEqual sprintf_copy
 # %s or %d.
-set 115
-swap 3
+setRegister 3 115
 deref8 0
-swap 0
-increment
-swap 0
+incrementRegister 0
 compare 3
 jumpNotEqual sprintf_%d
 # %s.
@@ -156,8 +127,7 @@ popRegister 1
 popRegister 0
 add 2
 swap 2
-set 4
-swap 3
+setRegister 3 4
 swap 1
 add 3
 swap 1
@@ -176,20 +146,15 @@ popRegister 1
 popRegister 0
 add 2
 swap 2
-set 4
-swap 3
+setRegister 3 4
 swap 1
 add 3
 swap 1
 jump sprintf_loop
 label sprintf_copy
-swap 2
 write8 2
-increment
-swap 2
-swap 3
-set 0
-swap 3
+incrementRegister 2
+setRegister 3 0
 compare 3
 jumpNotEqual sprintf_loop
 return
@@ -210,10 +175,8 @@ store32 4
 set 50
 copyCodeMemory format_str
 # Put format_str pointer to side register 0, arguments pointer to side register 1 and target pointer to main register.
-set 50
-swap 0
-set 0
-swap 1
+setRegister 0 50
+setRegister 1 0
 set 100
 call sprintf
 set 100

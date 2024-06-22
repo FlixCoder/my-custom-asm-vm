@@ -47,13 +47,13 @@ pub enum Instruction {
 	Data(VmPtr, Vec<u8>),
 	/// Swap main register with given side register.
 	Swap(u8),
-	/// Write the 8 bit value of register x to the address in the main register.
+	/// Write the 8 bit value of the main register to the address in register x.
 	Write8(u8),
-	/// Write the 16 bit value of register x to the address in the main
-	/// register.
+	/// Write the 16 bit value of the main register to the address in register
+	/// x.
 	Write16(u8),
-	/// Write the 32 bit value of register x to the address in the main
-	/// register.
+	/// Write the 32 bit value of the main register to the address in register
+	/// x.
 	Write32(u8),
 	/// Read stack pointer to main register.
 	ReadStackPointer,
@@ -110,6 +110,12 @@ pub enum Instruction {
 	/// Division of the main register by register x. The result is saved in the
 	/// main register, the remainder in register x.
 	Div(u8),
+	/// Increment the given side register.
+	IncrementRegister(u8),
+	/// Decrement the given side register.
+	DecrementRegister(u8),
+	/// Set a side register to a specific value.
+	SetRegister(u8, VmPtr),
 }
 
 impl Instruction {
@@ -162,6 +168,9 @@ impl Instruction {
 			Self::PopRegister(_) => 2,
 			Self::Mul(_) => 2,
 			Self::Div(_) => 2,
+			Self::IncrementRegister(_) => 2,
+			Self::DecrementRegister(_) => 2,
+			Self::SetRegister(_, _) => 2 + size_of::<VmPtr>(),
 		}
 	}
 
@@ -219,6 +228,12 @@ impl Instruction {
 			40 => Ok(Self::PopRegister(read_u8(code_sub_slice(1..)?)?)),
 			41 => Ok(Self::Mul(read_u8(code_sub_slice(1..)?)?)),
 			42 => Ok(Self::Div(read_u8(code_sub_slice(1..)?)?)),
+			43 => Ok(Self::IncrementRegister(read_u8(code_sub_slice(1..)?)?)),
+			44 => Ok(Self::DecrementRegister(read_u8(code_sub_slice(1..)?)?)),
+			45 => Ok(Self::SetRegister(
+				read_u8(code_sub_slice(1..)?)?,
+				read_vm_ptr(code_sub_slice(2..)?)?,
+			)),
 			c => Err(anyhow::format_err!("Unrecognized instruction: {c}")),
 		}
 	}
@@ -253,9 +268,9 @@ impl Instruction {
 				bytes.push(7);
 				bytes.extend_from_slice(&ptr.to_be_bytes());
 			}
-			Self::Set(ptr) => {
+			Self::Set(value) => {
 				bytes.push(8);
-				bytes.extend_from_slice(&ptr.to_be_bytes());
+				bytes.extend_from_slice(&value.to_be_bytes());
 			}
 			Self::Deref8(reg) => {
 				bytes.push(9);
@@ -374,6 +389,19 @@ impl Instruction {
 			Self::Div(reg) => {
 				bytes.push(42);
 				bytes.push(*reg);
+			}
+			Self::IncrementRegister(reg) => {
+				bytes.push(43);
+				bytes.push(*reg);
+			}
+			Self::DecrementRegister(reg) => {
+				bytes.push(44);
+				bytes.push(*reg);
+			}
+			Self::SetRegister(reg, value) => {
+				bytes.push(45);
+				bytes.push(*reg);
+				bytes.extend_from_slice(&value.to_be_bytes());
 			}
 		}
 		bytes

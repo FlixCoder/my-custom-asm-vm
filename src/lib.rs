@@ -187,18 +187,18 @@ impl<const SIDE_REGS: usize> Machine<SIDE_REGS> {
 				)
 			}
 			Instruction::Write8(reg) => {
-				let value = self.side_register(reg)? as u8;
-				let mem = self.memory_mut(self.main_register)?;
+				let value = self.main_register as u8;
+				let mem = self.memory_mut(self.side_register(reg)?)?;
 				write_u8(mem, value)?;
 			}
 			Instruction::Write16(reg) => {
-				let value = self.side_register(reg)? as u16;
-				let mem = self.memory_mut(self.main_register)?;
+				let value = self.main_register as u16;
+				let mem = self.memory_mut(self.side_register(reg)?)?;
 				write_u16(mem, value)?;
 			}
 			Instruction::Write32(reg) => {
-				let value = self.side_register(reg)? as u32;
-				let mem = self.memory_mut(self.main_register)?;
+				let value = self.main_register as u32;
+				let mem = self.memory_mut(self.side_register(reg)?)?;
 				write_u32(mem, value)?;
 			}
 			Instruction::ReadStackPointer => self.main_register = self.stack_pointer,
@@ -327,6 +327,20 @@ impl<const SIDE_REGS: usize> Machine<SIDE_REGS> {
 				let divisor = *register;
 				*register = value % divisor;
 				self.main_register = value / divisor;
+			}
+			Instruction::IncrementRegister(reg) => {
+				let register = self.side_register_mut(reg)?;
+				*register = register.wrapping_add(1);
+				self.flag_zero = *register == 0;
+			}
+			Instruction::DecrementRegister(reg) => {
+				let register = self.side_register_mut(reg)?;
+				*register = register.wrapping_sub(1);
+				self.flag_zero = *register == 0;
+			}
+			Instruction::SetRegister(reg, value) => {
+				let register = self.side_register_mut(reg)?;
+				*register = value;
 			}
 		}
 		Ok(true)
