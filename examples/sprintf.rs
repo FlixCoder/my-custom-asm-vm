@@ -194,23 +194,6 @@ compare 3
 jumpNotEqual sprintf_loop
 return
 
-# Function: Print number on a line.
-# Does not modify the register, but sets memory[0]=0.
-label print_number
-syscall 1
-call print_empty
-return
-
-# Function: Print empty line.
-# Does not modify the register, but sets memory[0]=0.
-label print_empty
-push
-set 0
-store8 0
-syscall 0
-pop
-return
-
 label format_str
 dataString Hello %s: %d!
 label inner_str
