@@ -95,7 +95,7 @@ impl Program {
 		let size = *size;
 		let instruction = self.instructions.get_mut(index).context("Invalid instruction index")?;
 		match instruction {
-			Instruction::CopyCodeMemory(_, _) => {
+			Instruction::CopyCodeMemory(src, s) if *src == VmPtr::MAX && *s == 0 => {
 				*instruction = Instruction::CopyCodeMemory(source, size);
 			}
 			_ => return Err(anyhow::format_err!("Instruction is not a dummy copy data")),
@@ -312,7 +312,10 @@ impl FromStr for Program {
 				"#" | "//" => continue,
 				// Label <name>
 				"label" if parts.len() == 2 => {
-					label_index.insert(parts[1], next_index);
+					let prev = label_index.insert(parts[1], next_index);
+					if prev.is_some() {
+						anyhow::bail!("Label {} is defined multiple times", parts[1]);
+					}
 				}
 				// Nop
 				"nop" if parts.len() == 1 => {

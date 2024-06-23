@@ -1,5 +1,26 @@
-# Start from main.
-jump main
+# Main program.
+# Put arguments to memory[0..8], inner string to memory[8..50], format string to memory[50..100].
+set 8
+store32 0
+copyCodeMemory inner_str
+set 123456789
+store32 4
+set 50
+copyCodeMemory format_str
+# Put format_str pointer to side register 0, arguments pointer to side register 1 and target pointer to main register.
+setRegister 0 50
+setRegister 1 0
+set 100
+call sprintf
+set 100
+syscall 0
+halt
+
+# Data
+label format_str
+dataString Hello %s: %d!
+label inner_str
+dataString world
 
 # Function: itoa
 # Converts the number in the main register to a string at the memory address given in side register 0.
@@ -172,27 +193,3 @@ store8 0
 syscall 0
 pop
 return
-
-label format_str
-dataString Hello %s: %d!
-label inner_str
-dataString world
-
-# Main.
-label main
-# Put arguments to memory[0..8], inner string to memory[8..50], format string to memory[50..100].
-set 8
-store32 0
-copyCodeMemory inner_str
-set 123456789
-store32 4
-set 50
-copyCodeMemory format_str
-# Put format_str pointer to side register 0, arguments pointer to side register 1 and target pointer to main register.
-setRegister 0 50
-setRegister 1 0
-set 100
-call sprintf
-set 100
-syscall 0
-halt
